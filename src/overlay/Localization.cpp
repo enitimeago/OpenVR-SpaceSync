@@ -51,6 +51,13 @@ namespace loc
 			{ "no running alignment", "連続アライメントなし", "无持续对齐" },
 			{ "Override disabled", "オーバーライド無効", "覆盖已禁用" },
 			{ "HMD tracking system changed?", "HMD のトラッキング方式が変わった可能性", "头显追踪系统可能已更改" },
+			{ "Calibrated for a different headset", "別のヘッドセット用にキャリブレーション済み", "已为另一台头显校准" },
+			{ "Standing by", "待機中", "待机中" },
+			{ "Click to calibrate this headset", "クリックしてこのヘッドセットをキャリブレーション", "点击为这台头显校准" },
+			{ "Same headset under a new name (another streamer)? Use the calibration with it.",
+			  "同じヘッドセットが別の名前で表示されていますか（別のストリーマー）？ このキャリブレーションを使えます。",
+			  "同一台头显换了名称（换了串流软件）？可以沿用这份校准。" },
+			{ "Use with this headset", "このヘッドセットで使う", "用于这台头显" },
 			{ "HMD Driven active", "HMD 主導モード動作中", "头显主导模式运行中" },
 			{ "Lighthouse Driven active", "Lighthouse 主導モード動作中", "Lighthouse 主导模式运行中" },
 

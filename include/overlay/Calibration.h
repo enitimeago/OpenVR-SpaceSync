@@ -48,6 +48,7 @@ struct CalibrationContext
 
 	bool enabled = false;
 	bool validProfile = false;
+	bool otherHeadset = false;        // a profile exists, but for a different headset than the one connected
 	bool lastCalibrationOk = false;   // did the last calibration run succeed
 	protocol::DriverStatus driverStatus = {};
 	bool refinementDirty = false;
@@ -135,6 +136,7 @@ struct CalibrationContext
 		trackerSerial = "";
 		enabled = false;
 		validProfile = false;
+		otherHeadset = false;
 		continuousSync = false;
 	}
 
@@ -209,4 +211,5 @@ void LoadChaperoneBounds();
 void ApplyChaperoneBounds();
 void SendOneEuroParams();
 void SendUniverseLock();
+void UseProfileWithCurrentHeadset();   // rebind the profile to the connected headset (same headset, new serial)
 void KeepCalibrationSpotAfterRotationEdit(const Eigen::Vector3d &previousRotation);

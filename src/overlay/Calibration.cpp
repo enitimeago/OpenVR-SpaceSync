@@ -683,7 +683,8 @@ void SendOneEuroParams()
 void SendUniverseLock()
 {
 	protocol::Request req(protocol::RequestSetUniverseLock);
-	req.setUniverseLock.enabled = CalCtx.lockBaseStations;
+	// Base stations are left to whatever aligns another headset.
+	req.setUniverseLock.enabled = CalCtx.lockBaseStations && !CalCtx.otherHeadset;
 	req.setUniverseLock.calibrating = CalCtx.state != CalibrationState::None;
 	req.setUniverseLock.command = CalCtx.lockCommitPending && CalCtx.state == CalibrationState::None ? 1u : 0u;
 
@@ -1187,10 +1188,54 @@ void ComputeRelativeOffset(CalibrationContext &ctx, const std::vector<Sample> &s
 
 static_assert(vr::k_unTrackedDeviceIndex_Hmd == 0, "HMD index expected to be 0");
 
+enum class HeadsetMatch { Same, Other, Unknown };
+
+static HeadsetMatch MatchProfileHeadset(CalibrationContext &ctx)
+{
+	if (vr::VRSystem()->GetTrackedDeviceClass(vr::k_unTrackedDeviceIndex_Hmd) != vr::TrackedDeviceClass_HMD)
+		return HeadsetMatch::Unknown;
+	std::string serial = GetDeviceSerial(vr::k_unTrackedDeviceIndex_Hmd);
+	if (serial.empty())
+		return HeadsetMatch::Unknown;
+
+	if (ctx.hmdSerial.empty())
+	{
+		ctx.hmdSerial = serial;
+		SaveProfile(ctx);
+		std::cerr << "Profile had no headset, bound to " << serial << std::endl;
+		return HeadsetMatch::Same;
+	}
+	return serial == ctx.hmdSerial ? HeadsetMatch::Same : HeadsetMatch::Other;
+}
+
+void UseProfileWithCurrentHeadset()
+{
+	if (!CalCtx.validProfile)
+		return;
+	std::string serial = GetDeviceSerial(vr::k_unTrackedDeviceIndex_Hmd);
+	if (serial.empty())
+		return;
+	std::cerr << "Profile rebound from " << CalCtx.hmdSerial << " to " << serial << std::endl;
+	CalCtx.hmdSerial = serial;
+	SaveProfile(CalCtx);
+	CalCtx.timeLastScan = 0.0;   // apply on the next tick
+}
+
 void ScanAndApplyProfile(CalibrationContext &ctx)
 {
 	char buffer[vr::k_unMaxPropertyStringSize];
-	ctx.enabled = ctx.validProfile;
+	HeadsetMatch match = ctx.validProfile ? MatchProfileHeadset(ctx) : HeadsetMatch::Unknown;
+	bool wasOtherHeadset = ctx.otherHeadset;
+	ctx.otherHeadset = ctx.validProfile && match == HeadsetMatch::Other;
+	ctx.enabled = ctx.validProfile && match == HeadsetMatch::Same;
+	if (ctx.otherHeadset != wasOtherHeadset)
+	{
+		if (ctx.otherHeadset)
+			std::cerr << "Headset " << GetDeviceSerial(vr::k_unTrackedDeviceIndex_Hmd) << " isn't the calibrated one ("
+				<< ctx.hmdSerial << "): leaving every device untouched" << std::endl;
+		else
+			std::cerr << "Calibrated headset back, applying the profile" << std::endl;
+	}
 
 	if (ctx.enabled)
 	{
@@ -1272,14 +1317,16 @@ void ScanAndApplyProfile(CalibrationContext &ctx)
 		}
 	}
 
-	for (uint32_t id = 0; overrideActive && id < vr::k_unMaxTrackedDeviceCount; ++id)
+	// Another headset: SLAM sync left on from the calibrated one is switched off as well.
+	for (uint32_t id = 0; (overrideActive || ctx.otherHeadset) && id < vr::k_unMaxTrackedDeviceCount; ++id)
 	{
 		auto deviceClass = vr::VRSystem()->GetTrackedDeviceClass(id);
 		if (deviceClass == vr::TrackedDeviceClass_Invalid)
 			continue;
 
 		// Follow mode: the world is SLAM space already, SLAM devices need no sync.
-		bool sync = ctx.continuousSync
+		bool sync = overrideActive
+			&& ctx.continuousSync
 			&& !ctx.followSlamHmd
 			&& id != vr::k_unTrackedDeviceIndex_Hmd
 			&& deviceClass != vr::TrackedDeviceClass_TrackingReference;

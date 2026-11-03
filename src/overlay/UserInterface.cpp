@@ -168,6 +168,13 @@ UserInterface::Status UserInterface::BuildStatus(const VRState& state) const
 		s.detail = "Click the circle to calibrate";
 		s.color = P.textMuted;
 	}
+	else if (CalCtx.otherHeadset)
+	{
+		// Not an error: another tool may be aligning this headset, SpaceSync stays out of its way.
+		s.headline = "Calibrated for a different headset";
+		s.detail = CalCtx.hmdSerial;
+		s.color = P.textMuted;
+	}
 	else if (!CalCtx.noHeadTracker && CalCtx.calibratedNoTracker)
 	{
 		s.headline = "Calibrated without a head tracker";
@@ -519,12 +526,18 @@ void UserInterface::RenderCalibration(const Status& status)
 	const float stackH = px(28 + 14 + 19 + 6 + 12.5f + 20 + 1 + 16) + 3.0f * lineH + px(12.0f) + 2.0f * lineH;
 	float y = c.y - stackH * 0.5f;
 
-	DrawIcon(dl, calibrated ? Icon::Check : Icon::Ring, ImVec2(c.x, y + px(14.0f)), 26.0f, Col(calibrated ? P.green : P.link), 2.2f);
+	// Calibrated for another headset: SpaceSync is idle, so no check mark.
+	const bool standingBy = calibrated && CalCtx.otherHeadset;
+	DrawIcon(dl, calibrated && !standingBy ? Icon::Check : Icon::Ring, ImVec2(c.x, y + px(14.0f)), 26.0f,
+		Col(standingBy ? P.textMuted : (calibrated ? P.green : P.link)), 2.2f);
 	y += px(28.0f + 14.0f);
-	DrawTextCentered(dl, F.semibold, 19.0f, ImVec2(c.x, y + px(9.5f)), P.textBright, calibrated ? "Calibrated" : "Calibrate");
+	DrawTextCentered(dl, F.semibold, 19.0f, ImVec2(c.x, y + px(9.5f)), P.textBright,
+		standingBy ? "Standing by" : (calibrated ? "Calibrated" : "Calibrate"));
 	y += px(19.0f + 6.0f);
 	DrawTextCentered(dl, F.regular, 12.5f, ImVec2(c.x, y + px(6.25f)), P.textMuted,
-		!vrReady ? "Start SteamVR to calibrate" : (calibrated ? "Click to calibrate again" : "Click to start"));
+		!vrReady ? "Start SteamVR to calibrate"
+		: standingBy ? "Click to calibrate this headset"
+		: (calibrated ? "Click to calibrate again" : "Click to start"));
 	y += px(12.5f + 20.0f);
 	dl->AddRectFilled(ImVec2(c.x - px(75.0f), y), ImVec2(c.x + px(75.0f), y + 1.0f), Col(P.border));
 	y += 1.0f + px(16.0f);
@@ -542,20 +555,29 @@ void UserInterface::RenderCalibration(const Status& status)
 
 	// Buttons below the circle
 	ImGui::SetCursorScreenPos(ImVec2(c.x, c.y + d * 0.5f + px(28.0f)));
+	// Standing by, editing would show nothing: the first button keeps the calibration for this headset instead.
+	const char* firstLabel = standingBy ? "Use with this headset" : "Edit Calibration";
 	ButtonOpts edit;
 	edit.enabled = calibrated;
 	ButtonOpts remove;
 	remove.enabled = calibrated;
 	remove.hoverBorder = P.dangerBorder;
-	float editW = TextSize(F.medium, 13.0f, "Edit Calibration").x + px(36.0f);
+	float editW = TextSize(F.medium, 13.0f, firstLabel).x + px(36.0f);
 	float removeW = TextSize(F.medium, 13.0f, "Remove Calibration").x + px(36.0f);
 	float total = editW + px(8.0f) + removeW;
 	ImGui::SetCursorScreenPos(ImVec2(c.x - total * 0.5f, ImGui::GetCursorScreenPos().y));
-	if (Button("Edit Calibration", edit))
+	if (Button(firstLabel, edit))
 	{
-		editView_ = true;
-		CalCtx.state = CalibrationState::Editing;
+		if (standingBy)
+			UseProfileWithCurrentHeadset();
+		else
+		{
+			editView_ = true;
+			CalCtx.state = CalibrationState::Editing;
+		}
 	}
+	if (standingBy && ImGui::IsItemHovered())
+		ImGui::SetTooltip("%s", loc::tr("Same headset under a new name (another streamer)? Use the calibration with it."));
 	ImGui::SameLine(0.0f, px(8.0f));
 	if (Button("Remove Calibration", remove))
 		confirmRemove_ = true;
